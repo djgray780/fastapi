@@ -1,0 +1,1 @@
+Running the API with `uvicorn app.main:app --reload` will look for the main.py file and inspect it for the instance of FastAPI(). 

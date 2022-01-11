@@ -4,12 +4,13 @@ from fastapi.params import Body
 from pydantic import BaseModel
 from typing import Optional
 from random import randrange
-
 from starlette.status import HTTP_204_NO_CONTENT
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 app = FastAPI()
 
-
+# Prepare the base Pydantic model 
 class Post(BaseModel):
     # The annotation-only declaration tells pydantic that this field is required.
     title: str
@@ -17,7 +18,22 @@ class Post(BaseModel):
     published: bool = True  # Defaults to True
     rating: Optional[int] = None
 
+# Establish the connection to the Postgres database.
+try:
+    conn = psycopg2.connect(
+        host="localhost",
+        dbname="fastapi",
+        user="postgres",
+        password="postgres",
+        cursor_factory=RealDictCursor,
+    )
+    cursor = conn.cursor()
+    print("Connected to Database ... ")
+except Exception as error:
+    print("Connecting to database failed ...")
+    print("Error", error)
 
+# Sample post data.
 my_posts = [
     {"title": "title of post 1", "content": "content of post 1", "id": 1},
     {"title": "title of post 2", "content": "content of post 2", "id": 2},
@@ -36,6 +52,7 @@ def find_index_post(id: int):
             return i
 
 
+# Route definitions
 @app.get("/")
 def root():
     return {"message": "Hello World, how are you?"}
