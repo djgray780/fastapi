@@ -2,9 +2,10 @@ from fastapi import FastAPI, Response, status, HTTPException, Depends
 from starlette.status import HTTP_204_NO_CONTENT
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from . import models, schemas
+from . import models, schemas, utils
 from .database import engine, get_db
 from sqlalchemy.orm import Session
+
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -41,7 +42,6 @@ def read_posts(db: Session = Depends(get_db)):
     #     """
     # )
     # posts = cursor.fetchall()
-
     posts = db.query(models.Post).all()
     return posts
 
@@ -63,6 +63,20 @@ def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_post)
     return new_post
+
+
+@app.post("/users", status_code=status.HTTP_201_CREATED, response_model=schemas.UserOut)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+
+    # Hash the password - user.password
+    hashed_password = utils.hash_password(user.password)
+    user.password = hashed_password
+
+    new_user = models.User(**user.dict())  # Unpacking operator on a dictionary object.
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
 
 
 @app.get("/posts/{id}")  # Path parameters are always returned as a string.
@@ -141,3 +155,15 @@ def update_post(
     post.query.update(updated_post.dict(), synchronize_session=False)
     db.commit()
     return post_query.first()
+
+
+@app.get("/users/{id}", response_model=schemas.UserOut)
+def get_user(id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id: {id} does not exist",
+        )
+
+    return user
