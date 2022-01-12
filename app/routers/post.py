@@ -5,10 +5,10 @@ from sqlalchemy.orm import Session
 from typing import List
 from starlette.status import HTTP_204_NO_CONTENT
 
-router = APIRouter()
+router = APIRouter(prefix="/posts", tags=['Posts'])
 
 
-@router.get("/posts", response_model=List[schemas.Post])
+@router.get("/", response_model=List[schemas.Post])
 def read_posts(db: Session = Depends(get_db)):
     # cursor.execute(
     #     """
@@ -20,7 +20,7 @@ def read_posts(db: Session = Depends(get_db)):
     return posts
 
 
-@router.get("/posts/{id}")  # Path parameters are always returned as a string.
+@router.get("/{id}")  # Path parameters are always returned as a string.
 def get_posts(id: int, db: Session = Depends(get_db)):
     # cursor.execute(
     #     """
@@ -43,7 +43,7 @@ def get_posts(id: int, db: Session = Depends(get_db)):
     return post
 
 
-@router.post("/posts", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
 def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db)):
     # cursor.execute(
     #     """
@@ -62,7 +62,7 @@ def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db)):
     return new_post
 
 
-@router.put("/posts/{id}")
+@router.put("/{id}")
 def update_post(
     id: int, updated_post: schemas.PostCreate, db: Session = Depends(get_db)
 ):
@@ -92,7 +92,7 @@ def update_post(
     return post_query.first()
 
 
-@router.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_post(id: int, db: Session = Depends(get_db)):
     # """Delete a single post"""
     # cursor.execute(
