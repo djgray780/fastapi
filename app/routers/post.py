@@ -1,27 +1,33 @@
-from .. import models, schemas
+from .. import models, schemas, oauth2
 from fastapi import status, HTTPException, Depends, APIRouter, Response
 from ..database import get_db
 from sqlalchemy.orm import Session
 from typing import List
 from starlette.status import HTTP_204_NO_CONTENT
 
-router = APIRouter(prefix="/posts", tags=['Posts'])
+router = APIRouter(prefix="/posts", tags=["Posts"])
 
 
 @router.get("/", response_model=List[schemas.Post])
-def read_posts(db: Session = Depends(get_db)):
+def read_posts(
+    db: Session = Depends(get_db), current_user: int = Depends(oauth2.get_current_user)
+):
     # cursor.execute(
     #     """
     #     SELECT * FROM posts
     #     """
     # )
     # posts = cursor.fetchall()
-    posts = db.query(models.Post).all()
+    posts = db.query(models.Post).filter(models.Post.owner_id == current_user.id).all()
     return posts
 
 
 @router.get("/{id}")  # Path parameters are always returned as a string.
-def get_posts(id: int, db: Session = Depends(get_db)):
+def get_posts(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: int = Depends(oauth2.get_current_user),
+):
     # cursor.execute(
     #     """
     #     SELECT * FROM posts
@@ -44,7 +50,11 @@ def get_posts(id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
-def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db)):
+def create_posts(
+    post: schemas.PostCreate,
+    db: Session = Depends(get_db),
+    current_user: int = Depends(oauth2.get_current_user),
+):
     # cursor.execute(
     #     """
     #     INSERT INTO posts (title, content, published)
@@ -55,7 +65,9 @@ def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db)):
     # )
     # new_post = cursor.fetchone()
     # conn.commit()
-    new_post = models.Post(**post.dict())  # Unpacking operator on a dictionary object.
+    new_post = models.Post(
+        owner_id=current_user.id, **post.dict()
+    )  # Unpacking operator on a dictionary object.
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
@@ -64,7 +76,10 @@ def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db)):
 
 @router.put("/{id}")
 def update_post(
-    id: int, updated_post: schemas.PostCreate, db: Session = Depends(get_db)
+    id: int,
+    updated_post: schemas.PostCreate,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(oauth2.get_current_user),
 ):
     # """Update posts"""
     # cursor.execute(
@@ -78,7 +93,6 @@ def update_post(
     # )
     # updated_post = cursor.fetchone()
     # conn.commit()
-
     post_query = db.query(models.Post).filter(models.Post.id == id)
     post = post_query.first()
 
@@ -87,31 +101,46 @@ def update_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"post with id:{id} does not exist.",
         )
-    post.query.update(updated_post.dict(), synchronize_session=False)
+
+    if str(post.owner_id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to perform the requested action.",
+        )
+
+    post_query.update(updated_post.dict(), synchronize_session=False)
     db.commit()
     return post_query.first()
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(id: int, db: Session = Depends(get_db)):
-    # """Delete a single post"""
-    # cursor.execute(
-    #     """
-    #     DELETE FROM posts WHERE id = %s
-    #     RETURNING *
-    #  """,
-    #     (str(id)),
-    # )
-    # deleted_post = cursor.fetchone()
-    post = db.query(models.Post).filter(models.Post.id == id)
+def delete_post(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: int = Depends(oauth2.get_current_user),
+):
 
-    if post.first() == None:
+    # cursor.execute(
+    #     """DELETE FROM posts WHERE id = %s returning *""", (str(id),))
+    # deleted_post = cursor.fetchone()
+    # conn.commit()
+    post_query = db.query(models.Post).filter(models.Post.id == id)
+
+    post = post_query.first()
+    print(type(post.owner_id), type(current_user.id))
+    if post == None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"post with id:{id} does not exist.",
+            detail=f"post with id: {id} does not exist",
         )
 
-    post.delete(synchronize_session=False)
+    if str(post.owner_id) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to perform requested action",
+        )
+
+    post_query.delete(synchronize_session=False)
     db.commit()
 
-    return Response(status_code=HTTP_204_NO_CONTENT)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
