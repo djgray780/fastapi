@@ -1,4 +1,6 @@
 __pycache__
 .vscode
-scratch.sql
 test.ipynb
+.env
+venv/
+scratch.sql

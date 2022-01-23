@@ -2,15 +2,18 @@ from .. import models, schemas, oauth2
 from fastapi import status, HTTPException, Depends, APIRouter, Response
 from ..database import get_db
 from sqlalchemy.orm import Session
-from typing import List
-from starlette.status import HTTP_204_NO_CONTENT
+from typing import List, Optional
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
 
 @router.get("/", response_model=List[schemas.Post])
 def read_posts(
-    db: Session = Depends(get_db), current_user: int = Depends(oauth2.get_current_user)
+    db: Session = Depends(get_db),
+    current_user: int = Depends(oauth2.get_current_user),
+    limit: int = 10,
+    skip: int = 0,
+    search: Optional[str] = "",
 ):
     # cursor.execute(
     #     """
@@ -18,11 +21,19 @@ def read_posts(
     #     """
     # )
     # posts = cursor.fetchall()
-    posts = db.query(models.Post).filter(models.Post.owner_id == current_user.id).all()
+    posts = (
+        db.query(models.Post)
+        .filter(models.Post.title.contains(search))
+        .limit(limit)
+        .offset(skip)
+        .all()
+    )
     return posts
 
 
-@router.get("/{id}")  # Path parameters are always returned as a string.
+@router.get(
+    "/{id}", response_model=schemas.Post
+)  # Path parameters are always returned as a string.
 def get_posts(
     id: int,
     db: Session = Depends(get_db),
@@ -38,7 +49,6 @@ def get_posts(
     # post = cursor.fetchone()
 
     post = db.query(models.Post).filter(models.Post.id == id).first()
-    print(post)
 
     if not post:
         raise HTTPException(
