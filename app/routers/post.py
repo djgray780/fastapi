@@ -2,12 +2,13 @@ from .. import models, schemas, oauth2
 from fastapi import status, HTTPException, Depends, APIRouter, Response
 from ..database import get_db
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
-
-@router.get("/", response_model=List[schemas.Post])
+# @router.get("/", response_model=List[schemas.Post])
+@router.get("/", response_model=List[schemas.PostOut])
 def read_posts(
     db: Session = Depends(get_db),
     current_user: int = Depends(oauth2.get_current_user),
@@ -21,8 +22,18 @@ def read_posts(
     #     """
     # )
     # posts = cursor.fetchall()
+    # posts = (
+    #     db.query(models.Post)
+    #     .filter(models.Post.title.contains(search))
+    #     .limit(limit)
+    #     .offset(skip)
+    #     .all()
+    # )
+
     posts = (
-        db.query(models.Post)
+        db.query(models.Post, func.count(models.Vote.post_id).label("votes"))
+        .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
+        .group_by(models.Post.id)
         .filter(models.Post.title.contains(search))
         .limit(limit)
         .offset(skip)
@@ -32,9 +43,9 @@ def read_posts(
 
 
 @router.get(
-    "/{id}", response_model=schemas.Post
+    "/{id}", response_model=schemas.PostOut
 )  # Path parameters are always returned as a string.
-def get_posts(
+def get_post(
     id: int,
     db: Session = Depends(get_db),
     current_user: int = Depends(oauth2.get_current_user),
@@ -48,7 +59,15 @@ def get_posts(
     # )
     # post = cursor.fetchone()
 
-    post = db.query(models.Post).filter(models.Post.id == id).first()
+    # post = db.query(models.Post).filter(models.Post.id == id).first()
+
+    post = (
+        db.query(models.Post, func.count(models.Vote.post_id).label("votes"))
+        .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
+        .group_by(models.Post.id)
+        .filter(models.Post.id == id)
+        .first()
+    )
 
     if not post:
         raise HTTPException(
